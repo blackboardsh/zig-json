@@ -1,0 +1,7 @@
+.{
+    .name = .zig_json,
+    .fingerprint = 0xa36dc6a6ef595b93,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.16.0",
+    .paths = .{ "build.zig", "build.zig.zon", "src", "vendor", "tests.zig", "tests", "examples", "bench", "integrations", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md" },
+}

@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {loadJsonCapability} from './index.js';
+const extension = process.platform === 'darwin' ? 'dylib' : process.platform === 'win32' ? 'dll' : 'so';
+const path = process.env.ZIG_JSON_CAPABILITY || `${process.cwd()}/zig-out/lib/libzig_json_cottontail.${extension}`;
+const json = loadJsonCapability(path);
+const enc = new TextEncoder(), dec = new TextDecoder();
+assert.throws(()=>json.parseNative(new Uint8Array(0)));
+assert.throws(()=>json.prepare(new Uint8Array(0),[]));
+const viewBytes=enc.encode('xx{"x":1}yy');
+const view=json.prepare(new DataView(viewBytes.buffer,2,7),['/x']);
+assert.equal(dec.decode(view.replace([2])),'{"x":2}');view.dispose();
+const source = enc.encode(' {"a":false,"nested":{"name":"café"},"big":18446744073709551615} ');
+const plan = json.prepare(source, ['/nested/name','/a']);
+source.fill(32);
+const out = plan.replace(['longer "name"\n',true]);
+assert.deepEqual(JSON.parse(dec.decode(out)),{a:true,nested:{name:'longer "name"\n'},big:18446744073709551615});
+assert.equal(dec.decode(plan.original(1)), 'false');
+assert.ok(dec.decode(out).includes('"big":18446744073709551615'));
+const raw = plan.replaceRaw(['null','false']);
+assert.equal(JSON.parse(dec.decode(raw)).nested.name,null);
+assert.throws(()=>plan.replaceRaw(['[1,]','true']));
+assert.throws(()=>plan.replace([undefined,true]));
+assert.throws(()=>json.prepare('{"x":1,"x":2}',['/x']));
+assert.throws(()=>json.prepare('{"x":[1]}',['/x','/x/0']));
+plan.dispose();plan.dispose();assert.throws(()=>plan.original(0));
+const doc=json.parseNative(out);
+assert.equal(dec.decode(doc.getBytes('/big')), '18446744073709551615');
+assert.equal(doc.get('/a'),true);
+assert.deepEqual(doc.get('/nested'),{name:'longer "name"\n'});
+assert.throws(()=>doc.get('/missing'));doc.dispose();assert.throws(()=>doc.get());
+// Reentrancy: coercion/getters may dispose a handle before a native call begins.
+const victim=json.prepare('{"x":1}',['/x']);
+assert.throws(()=>victim.replace([{toJSON(){victim.dispose();return 2;}}]));
+const values=[null,true,false,-1,1.5,'café 😀 "quoted"\n\u0000',[1,2],{a:true}];
+let checked=0;
+for(const old of values)for(const value of values){
+  const input=' {"na\\u006de":'+JSON.stringify(old)+',"n":1e+02} ';
+  const p=json.prepare(input,['/name']);
+  assert.equal(dec.decode(p.replace([value])),' {"na\\u006de":'+JSON.stringify(value)+',"n":1e+02} ');
+  p.dispose();checked++;
+}
+console.log(`Cottontail integration passed: ${checked} replacement pairs, ownership, disposal, precision, and errors.`);

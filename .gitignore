@@ -1,1 +1,6 @@
-# Add files to ignore here
+.zig-cache/
+zig-out/
+*.so
+*.dylib
+*.dll
+__pycache__/
